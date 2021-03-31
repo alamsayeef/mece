@@ -1,0 +1,164 @@
+---
+title: "House Price Prediction"
+author: "Md Sayeef Alam"
+date: "31/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##HOUSE PRICE PREDICTION
+
+Using the S&P Case-Schiller Home Price Index as a proxy for home prices building a data science model
+
+Prerequisites:
+
+Installing the required packages
+
+```{r c1, message = FALSE}
+library(randomForest)
+library(tidyverse)
+library(caret)
+library(xgboost)
+library(ggplot2)
+library(neuralnet)
+library(e1071)
+```
+
+Importing the data set
+
+```{r c2}
+d = read.csv("/Users/mdsayeefalam/Downloads/hpi.csv")
+```
+
+#Exploratory Data Analysis:
+
+Checking the data types of the variables, summary statistics and distribution of the variables
+
+```{r c3}
+str(d)
+
+summary(d)
+
+hist(d$Index, main = "Histogram of House Price Index")
+hist(d$TotalHouses, main = "Histogram of Total Houses")
+hist(d$vacantland, main = "Histogram of Vacant Land")
+hist(d$inflation, main = "Histogram of Inflation")
+hist(d$PPI, main = "Histogram of PPI")
+hist(d$RVR, main = "Histogram of RVR")
+hist(d$MSP, main = "Histogram of MSP")
+```
+
+Data cleaning:
+
+Checking for missing values and then either droping or providing adjusted values in their place
+
+```{r c4}
+sapply(d, function(x) sum(is.na(x)))
+```
+
+So we observe that their are missing values in Vacant Land and Inflation variable.
+
+Feature engineering is not required as all variables are in the required format. Moving onto the data wrangling process.
+
+```{r c5}
+d$vacantland[is.na(d$vacantland)]<-mean(d$vacantland,na.rm=TRUE)
+d$inflation[is.na(d$inflation)]<-mean(d$inflation,na.rm=TRUE)
+d = select(d,-1)
+```
+
+Now that we have complete data we can proceed with model development but prior to that lets divide our dataset into training and testing to later check for robustness of the models used.
+
+```{r c6}
+dt = sort(sample(nrow(d), nrow(d)*.8))
+train<-d[dt,]
+test<-d[-dt,]
+```
+
+Let us now fit our models to the training dataset:
+
+1.    Random Forest Regression
+2.    Linear Regression
+3.    XGBoost Regression
+
+For the random forest regression we have;
+
+```{r c7}
+rf.fit <- randomForest(Index ~ ., data = train, mtry = 3, importance = TRUE, na.action = na.omit)
+print(rf.fit)
+plot(rf.fit)
+```
+
+For linear regression we have;
+
+```{r c8}
+lr.fit = lm(Index ~ ., data = train)
+summary(lr.fit)
+```
+
+For XGBoost regression we have;
+
+```{r c9, results=F}
+xgb.fit = xgboost(data = as.matrix(train[, 2:12]),
+                  label = as.matrix(train[, 1]),
+                  nrounds = 1000,
+                  objective = "reg:squarederror",
+                  early_stopping_rounds = 3,
+                  max_depth = 6,
+                  eta = .25)
+```
+Some more models to be compared, like Support Vector Regression and the infamous Neural Network
+
+```{r c 10}
+svr.fit = svm(Index ~ ., data = train)
+```
+
+Code for neural network model
+
+```{r c 11}
+nn.fit = neuralnet(Index ~ ., 
+                data = train, hidden = c(5,5), 
+                linear.output = TRUE)
+```
+
+The above models were tuned or used the default hyperparameters and would yield a much robust prediction if properly implemented.
+
+Now let us check the validity of model on test dataset
+
+```{r c12}
+pred_randomForest = predict(rf.fit, test[,-1])
+pred_lr = predict(lr.fit, test[-1])
+pred_xgb = predict(xgb.fit,as.matrix(test[,-1]))
+pred_svr = predict(svr.fit, test[-1])
+pred_nn = predict(nn.fit, test[,-1])
+```
+
+We are considering the root mean square error for model validity lower the RMSE scores better is the performance.
+
+```{r c13}
+rferror = RMSE(pred_randomForest,test$Index)
+lrerror = RMSE(pred_lr,test$Index)
+xgberror = RMSE(pred_xgb,test$Index)
+svrerror = RMSE(pred_svr,test$Index)
+nnerror = RMSE(pred_nn,test$Index)
+```
+
+Visualizing the result for easier interpretation and choice of model.
+
+```{r c14}
+modelchoice = cbind(rferror,lrerror,xgberror,svrerror,nnerror)
+modelchoice
+barplot(modelchoice)
+```
+
+Hence, Random Forest seems to be the best predictor model among the five with the lowest error rates.
+
+
+
+-----------------------------------------------Thank you.--------------------------------------
+
+
+
+
